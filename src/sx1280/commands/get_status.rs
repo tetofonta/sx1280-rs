@@ -37,9 +37,9 @@ pub struct Status {
     #[bits(2)]
     _pad: u8,
     #[bits(3)]
-    command_status: CommandStatus,
+    pub command_status: CommandStatus,
     #[bits(3)]
-    circuit_mode: CircuitMode,
+    pub circuit_mode: CircuitMode,
 }
 
 impl<MODE: SX1280Mode> SX1280Command<MODE> for GetStatusCommand {

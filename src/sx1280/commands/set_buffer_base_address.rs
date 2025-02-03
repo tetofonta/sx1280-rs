@@ -2,10 +2,9 @@ use bitfield_struct::bitfield;
 use crate::sx1280::commands::{NullResponse, NullResponseBufferType, SX1280Command, SX1280CommandError};
 use crate::sx1280::SX1280ModeValid;
 
-#[bitfield(u16, defmt=true)]
 pub struct SetBufferBaseAddressCommand{
-    rx_base_address: u8,
-    tx_base_address: u8,
+    pub rx_base_address: u8,
+    pub tx_base_address: u8,
 }
 
 impl<MODE: SX1280ModeValid> SX1280Command<MODE> for SetBufferBaseAddressCommand {
@@ -15,6 +14,6 @@ impl<MODE: SX1280ModeValid> SX1280Command<MODE> for SetBufferBaseAddressCommand 
     type ResponseType = NullResponse;
 
     fn as_write_bytes(&self) -> Result<Self::ArgumentsBufferType, SX1280CommandError> {
-        Ok(self.into_bits().to_be_bytes())
+        Ok([self.tx_base_address, self.rx_base_address])
     }
 }

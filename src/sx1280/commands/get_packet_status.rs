@@ -4,8 +4,8 @@ use crate::sx1280::lora::ModeLoRa;
 pub struct GetPacketStatusCommand;
 
 pub struct LoRaPacketStatus {
-    rssi: f32,
-    snr: f32,
+    pub rssi: f32,
+    pub snr: f32,
 }
 
 impl SX1280Command<ModeLoRa> for GetPacketStatusCommand {

@@ -1,10 +1,10 @@
 use bitfield_struct::{bitfield, FromBits, IntoBits};
 use defmt::Format;
-use num_enum_derive::{FromPrimitive, IntoPrimitive};
+use num_enum_derive::{FromPrimitive, IntoPrimitive, TryFromPrimitive};
 use crate::sx1280::commands::{NullResponse, NullResponseBufferType, SX1280Command, SX1280CommandError};
 use crate::sx1280::lora::ModeLoRa;
 
-#[derive(Clone, Copy, Debug, Format, IntoPrimitive, FromPrimitive, IntoBits, FromBits)]
+#[derive(Clone, Copy, Debug, Format, TryFromPrimitive)]
 #[repr(u8)]
 pub enum CadSymbolsNumber {
     Cad1Symbol = 0,
@@ -12,14 +12,10 @@ pub enum CadSymbolsNumber {
     Cad4Symbols = 0x40,
     Cad8Symbols = 0x60,
     Cad16Symbols = 0x80,
-
-    #[num_enum(catch_all)]
-    Unknown(u8),
 }
 
-#[bitfield(u8, defmt=true)]
 pub struct SetCadParametersCommand{
-    #[bits(8)] ramp: CadSymbolsNumber,
+    pub symbol_number: CadSymbolsNumber,
 }
 
 impl SX1280Command<ModeLoRa> for SetCadParametersCommand {
@@ -29,6 +25,6 @@ impl SX1280Command<ModeLoRa> for SetCadParametersCommand {
     type ResponseType = NullResponse;
 
     fn as_write_bytes(&self) -> Result<Self::ArgumentsBufferType, SX1280CommandError> {
-        Ok([self.into_bits()])
+        Ok([self.symbol_number as u8])
     }
 }

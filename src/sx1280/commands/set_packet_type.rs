@@ -8,6 +8,7 @@ use crate::sx1280::SX1280Mode;
 pub enum PacketType {
     GFSK = 0,
     LoRa = 1,
+    #[cfg(feature = "ranging")]
     Ranging = 2,
     FLRC = 3,
     BLE = 4,

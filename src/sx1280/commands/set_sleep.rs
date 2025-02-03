@@ -4,8 +4,8 @@ use crate::sx1280::SX1280ModeValid;
 
 #[bitfield(u8, defmt=true)]
 pub struct SetSleepModeCommand {
-    retain_ram: bool,
-    retain_data_buffer: bool,
+    pub retain_ram: bool,
+    pub retain_data_buffer: bool,
     #[bits(6)] _unused: u8
 }
 

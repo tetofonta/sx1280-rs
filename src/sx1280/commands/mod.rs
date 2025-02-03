@@ -2,7 +2,6 @@ pub mod get_status;
 pub mod set_packet_type;
 pub mod set_sleep;
 pub mod set_standby;
-
 pub mod set_fs;
 pub mod set_tx;
 pub mod set_rx;
@@ -17,12 +16,19 @@ pub mod set_modulation_parameters;
 pub mod set_packet_parameters;
 pub mod get_rx_buffer_status;
 pub mod get_packet_status;
+pub mod set_tx_continuous_wave;
+pub mod set_tx_long_preamble;
+pub mod get_instantaneous_rssi;
+pub mod set_irq_params;
+pub mod get_irq_status;
+pub mod clear_irq;
 
 use core::error::Error;
 use core::fmt::{Display, Formatter};
 use bitfield_struct::{FromBits, IntoBits};
+use bitflags::bitflags;
 use defmt::Format;
-use num_enum_derive::{FromPrimitive, IntoPrimitive};
+use num_enum_derive::{FromPrimitive, IntoPrimitive, TryFromPrimitive};
 use crate::sx1280::SX1280Mode;
 
 
@@ -64,29 +70,45 @@ impl TryFrom<(u8, [u8; 0])> for NullResponse {
 }
 
 
-#[derive(Clone, Copy, Debug, Format, FromPrimitive, IntoPrimitive, IntoBits, FromBits)]
+#[derive(Clone, Copy, Debug, Format, TryFromPrimitive)]
 #[repr(u8)]
 pub enum PeriodBase {
     Base15u625s = 0,
     Base62u5s = 1,
     Base1ms = 2,
     Base4ms = 3,
+}
 
-    #[num_enum(catch_all)]
-    Unknown(u8),
+bitflags! {
+    pub struct SX1280Interrupt: u16 {
+        const TxDone =                      0x0001;
+        const RxDone =                      0x0002;
+        const SyncWordValid =               0x0004;
+        const SyncWordError =               0x0008;
+        const HeaderValid =                 0x0010;
+        const HeaderError =                 0x0020;
+        const CRCError =                    0x0040;
+        const RangingSlaveResponseDone =    0x0080;
+        const RangingSlaveRequestDiscard =  0x0100;
+        const RangingMasterResultValid =    0x0200;
+        const RangingMasterTimeout =        0x0400;
+        const RangingSlaveRequestValid =    0x0800;
+        const CADDone =                     0x1000;
+        const CADDetect =                   0x2000;
+        const RXTXTimeout =                 0x4000;
+        const PreambleDetect =              0x8000;
+
+        const _ = !0;
+    }
 }
 
 
 //FIXME: implement
-//  SetTxContinuousWave,
-//  SetTxContinuousPreamble,
 //  SetAutoTx,
 //  SetAutoRx,
 //  GetPacketType,
 //  Non LoRa SetModulationParams
 //  Non LoRa SetPacketParameters
 //  Non LoRa GetPacketStatus
-//  GetRssiInst
-//  All the irqs
 
 //TODO: implement a set_mode enum for all the possible modes with a into method

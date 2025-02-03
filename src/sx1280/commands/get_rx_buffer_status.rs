@@ -4,12 +4,9 @@ use crate::sx1280::SX1280Mode;
 
 pub struct GetRxBufferStatusCommand;
 
-#[bitfield(u16, defmt=true)]
 pub struct BufferStatus {
-    #[bits(8)]
-    rx_buffer_start_pointer: u8,
-    #[bits(8)]
-    rx_payload_len: u8,
+    pub rx_buffer_start_pointer: u8,
+    pub rx_payload_len: u8,
 }
 
 impl<MODE: SX1280Mode> SX1280Command<MODE> for GetRxBufferStatusCommand {
@@ -27,6 +24,9 @@ impl TryFrom<(u8, [u8; 3])> for BufferStatus {
     type Error = SX1280CommandError;
 
     fn try_from(value: (u8, [u8; 3])) -> Result<Self, Self::Error> {
-        Ok(Self::from_bits(u16::from_be_bytes(value.1[1..].try_into().unwrap())))
+        Ok(Self {
+            rx_buffer_start_pointer: value.1[2],
+            rx_payload_len: value.1[1],
+        })
     }
 }

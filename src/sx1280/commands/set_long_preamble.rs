@@ -3,11 +3,7 @@ use crate::sx1280::commands::{NullResponse, NullResponseBufferType, SX1280Comman
 use crate::sx1280::gfsk::ModeGFSK;
 use crate::sx1280::lora::ModeLoRa;
 
-#[bitfield(u8, defmt=true)]
-pub struct SetLongPreambleModeCommand {
-    enabled: bool,
-    #[bits(7)] _unused: u8
-}
+pub struct SetLongPreambleModeCommand(pub bool);
 
 impl SX1280Command<ModeGFSK> for SetLongPreambleModeCommand {
     const OPCODE: u8 = 0x9B;
@@ -16,7 +12,7 @@ impl SX1280Command<ModeGFSK> for SetLongPreambleModeCommand {
     type ResponseType = NullResponse;
 
     fn as_write_bytes(&self) -> Result<Self::ArgumentsBufferType, SX1280CommandError> {
-        Ok([self.into_bits()])
+        Ok([if self.0 { 1 } else { 0 }])
     }
 }
 
@@ -27,6 +23,6 @@ impl SX1280Command<ModeLoRa> for SetLongPreambleModeCommand {
     type ResponseType = NullResponse;
 
     fn as_write_bytes(&self) -> Result<Self::ArgumentsBufferType, SX1280CommandError> {
-        Ok([self.into_bits()])
+        Ok([if self.0 { 1 } else { 0 }])
     }
 }

@@ -6,6 +6,8 @@ pub mod lora;
 pub mod gfsk;
 pub mod flrc;
 pub mod ble;
+#[cfg(feature = "ranging")]
+pub mod ranging;
 
 use core::marker::PhantomData;
 use defmt::Format;
@@ -24,6 +26,7 @@ pub enum SX1280Error<DEV: SXDevice> {
     Busy,
     PinError,
     RegisterError(SX1280RegisterError),
+    Timeout,
     Other,
 }
 

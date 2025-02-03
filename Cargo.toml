@@ -25,8 +25,10 @@ portable-atomic =  { version = "1.10.0", features = ["critical-section"] }
 num_enum = {git = "https://github.com/tetofonta/num_enum", default-features = false}
 num_enum_derive = {git = "https://github.com/tetofonta/num_enum", default-features = false, features = ["const"]}
 bitfield-struct = { git = "https://github.com/tetofonta/bitfield-struct-rs", features = ["num_enum"]}
-endian-num = { version = "0.2.0", features = ["linux-types"] }
-log = "0.4.25"
+bitflags = "2.8.0"
+
+[features]
+ranging = []
 
 # cargo build/run
 [profile.dev]
