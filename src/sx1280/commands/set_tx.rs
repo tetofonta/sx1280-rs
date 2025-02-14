@@ -7,7 +7,7 @@ use crate::sx1280::SX1280ModeValid;
 #[derive(Clone, Copy, Debug, Format, FromPrimitive, IntoPrimitive, IntoBits, FromBits)]
 #[repr(u16)]
 pub enum TxPeriod {
-    OneShot = 0,
+    NoTimeout = 0,
     #[num_enum(catch_all)]
     Interval(u16),
 }

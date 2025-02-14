@@ -63,3 +63,8 @@ impl Spi1Pins {
 pub type PinResetA = Pin<Gpio2, FunctionSioOutput, PullDown>;
 pub type PinCSA = Pin<Gpio5, FunctionSioOutput, PullDown>;
 pub type PinBusyA = Pin<Gpio3, FunctionSioInput, PullUp>;
+
+
+pub type PinResetB = Pin<Gpio14, FunctionSioOutput, PullDown>;
+pub type PinCSB = Pin<Gpio13, FunctionSioOutput, PullDown>;
+pub type PinBusyB = Pin<Gpio15, FunctionSioInput, PullUp>;

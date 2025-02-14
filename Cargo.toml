@@ -26,6 +26,7 @@ num_enum = {git = "https://github.com/tetofonta/num_enum", default-features = fa
 num_enum_derive = {git = "https://github.com/tetofonta/num_enum", default-features = false, features = ["const"]}
 bitfield-struct = { git = "https://github.com/tetofonta/bitfield-struct-rs", features = ["num_enum"]}
 bitflags = "2.8.0"
+log = "0.4.25"
 
 [features]
 ranging = []

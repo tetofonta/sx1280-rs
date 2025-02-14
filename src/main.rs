@@ -20,7 +20,6 @@ mod app {
     use core::mem::MaybeUninit;
     use cortex_m::peripheral::NVIC;
     use defmt::{error, info, trace};
-    
     use rp2040_hal::{
         usb::UsbBus,
         pac::Interrupt
@@ -32,7 +31,7 @@ mod app {
     use crate::cdc::CDCDevice;
     use crate::spi::SpiDevice;
     use crate::sx1280::commands::clear_irq::ClearIrqCommand;
-    use crate::sx1280::SX1280;
+    use crate::sx1280::{SX1280Error, SX1280};
     use crate::sx1280::commands::get_status::GetStatusCommand;
     use crate::sx1280::commands::set_buffer_base_address::SetBufferBaseAddressCommand;
     use crate::sx1280::commands::set_modulation_parameters::{Bandwidth, CodingRate, SetLoraModulationParameters, SpreadingFactor};
@@ -42,8 +41,14 @@ mod app {
     use crate::sx1280::commands::set_tx::{SetTxModeCommand, TxPeriod};
     use crate::sx1280::commands::set_tx_parameters::{SetTxParametersCommand, TxRampTime};
     use crate::sx1280::commands::{PeriodBase, SX1280Interrupt};
+    use crate::sx1280::commands::get_irq_status::GetIrqStatusCommand;
+    use crate::sx1280::commands::set_irq_params::SetIRQParametersCommand;
+    use crate::sx1280::commands::set_rx::{RxPeriod, SetRxModeCommand};
+    use crate::sx1280::commands::set_standby::{SetStandbyModeCommand, StandbyMode};
     use crate::sx1280::lora::ModeLoRa;
-    use crate::sx1280::registers::rx_gain::RxGain;
+    use crate::sx1280::registers::frequency_compensation_mode::FrequencyCompensationMode;
+    use crate::sx1280::registers::rx_gain::{RxGain, RxGainSensitivity};
+    use crate::sx1280::registers::sf_additional_configuration::SFAdditionalConfiguration;
     use crate::sx1280::uninitialized::ModeUninitialized;
 
     #[shared]
@@ -59,7 +64,8 @@ mod app {
 
     #[init(local = [
         usb_bus: MaybeUninit<UsbBusAllocator<UsbBus>> = MaybeUninit::uninit(),
-        spi_bus: MaybeUninit<Spi1> = MaybeUninit::uninit(),
+        spi_bus_a: MaybeUninit<Spi0> = MaybeUninit::uninit(),
+        spi_bus_b: MaybeUninit<Spi1> = MaybeUninit::uninit(),
     ])]
     fn init(cx: init::Context) -> (Shared, Local) {
         info!("Starting");
@@ -75,15 +81,19 @@ mod app {
         ).unwrap();
 
         trace!("Init SPI devices");
-        let spi = cx.local.spi_bus.write(board.spi_1);
-        let sx_a = SpiDevice::new(spi, board.pin_cs_a).ok().unwrap();
+        let spi_a = cx.local.spi_bus_a.write(board.spi_0);
+        let sx_a = SpiDevice::new(spi_a, board.pin_cs_a).ok().unwrap();
         let sx_a_dev = SX1280::new(sx_a, board.pin_busy_a, board.pin_reset_a).ok().unwrap();
+
+        let spi_b = cx.local.spi_bus_b.write(board.spi_1);
+        let sx_b = SpiDevice::new(spi_b, board.pin_cs_b).ok().unwrap();
+        let sx_b_dev = SX1280::new(sx_b, board.pin_busy_b, board.pin_reset_b).ok().unwrap();
 
         let (uart_recv, uart_rx_queue) = make_channel!(u8, 32);
         let (uart_send, uart_tx_queue) = make_channel!(u8, 32);
 
         info!("Start Scheduling");
-        usb_rx::spawn(uart_rx_queue, uart_send, sx_a_dev).ok().unwrap();
+        usb_rx::spawn(uart_rx_queue, uart_send, sx_a_dev, sx_b_dev).ok().unwrap();
 
         (
             Shared {
@@ -120,50 +130,132 @@ mod app {
         _: usb_rx::Context,
         mut rx_queue: Receiver<'static, u8, 32>,
         mut uart_tx: Sender<'static, u8, 32>,
-        sx: SX1280<'static, Spi1, PinCSA, PinBusyA, PinResetA, ModeUninitialized>
+        sx_a: SX1280<'static, Spi0, PinCSA, PinBusyA, PinResetA, ModeUninitialized>,
+        sx_b: SX1280<'static, Spi1, PinCSB, PinBusyB, PinResetB, ModeUninitialized>
     ) {
 
-        let mut dev = sx.reset().await.ok().unwrap();
-        dev.wait_for_busy(1000).await.ok().unwrap();
-        let mut dev = dev.set_operating_mode::<ModeLoRa>().await.ok().unwrap();
-        dev.wait_for_busy(1000).await.ok().unwrap();
+        trace!("Resetting...");
+        let mut tx = sx_b.reset().await.ok().unwrap();
+        let mut rx = sx_a.reset().await.ok().unwrap();
+        trace!("Reset complete...");
 
-        dev.command_and_wait(ClearIrqCommand(SX1280Interrupt::all())).await.ok().unwrap();
-        dev.command_and_wait(SetRFFrequencyCommand(2_450_000_000)).await.ok().unwrap();
-        dev.command_and_wait(SetLoraModulationParameters{
-            coding_rate: CodingRate::CR4_5,
-            bandwidth: Bandwidth::BW406k25Hz,
-            spreading_factor: SpreadingFactor::SF8,
-        }).await.ok().unwrap();
-        dev.command_and_wait(SetTxParametersCommand{
-            ramp: TxRampTime::Ramp20us,
-            power: -18,
-        }).await.ok().unwrap();
-        dev.command_and_wait(SetLoraPacketParameters{
-            iq_mode: LoRaIQMode::Standard,
-            crc_mode: LoRaCrcMode::Enabled,
-            payload_length: 128,
-            header_type: LoRaHeaderType::Explicit,
-            preamble_length: 8.into(),
-        }).await.ok().unwrap();
-        dev.command_and_wait(SetBufferBaseAddressCommand{
-            rx_base_address: 0,
-            tx_base_address: 128,
-        }).await.ok().unwrap();
-        dev.write_buffer(128, &[10, 20, 30, 40, 50, 60, 78]).await.ok().unwrap();
-        dev.command_and_wait(SetTxModeCommand{
-            period: TxPeriod::OneShot,
-            period_base: PeriodBase::Base4ms,
-        }).await.ok().unwrap();
 
-        let status = dev.command(GetStatusCommand).await.ok().unwrap();
-        let status = status.into_bits();
+        tx.wait_for_busy(1000).await.ok().unwrap();
+        rx.wait_for_busy(1000).await.ok().unwrap();
+        tx.command_and_wait(SetStandbyModeCommand { mode: StandbyMode::StandbyRC }, 1000).await.ok().unwrap();
+        rx.command_and_wait(SetStandbyModeCommand { mode: StandbyMode::StandbyRC }, 1000).await.ok().unwrap();
+
+        let mut tx = tx.set_operating_mode::<ModeLoRa>().await.ok().unwrap();
+        let mut rx = rx.set_operating_mode::<ModeLoRa>().await.ok().unwrap();
+        tx.wait_for_busy(1000).await.ok().unwrap();
+        rx.wait_for_busy(1000).await.ok().unwrap();
+
+        info!("TX Config...");
+        //tx_config
+        {
+            tx.command_and_wait(SetRFFrequencyCommand(2_495_000_000), 1000).await.ok().unwrap();
+            tx.command_and_wait(SetBufferBaseAddressCommand { rx_base_address: 0, tx_base_address: 128 }, 1000).await.ok().unwrap();
+            tx.command_and_wait(SetLoraModulationParameters {
+                bandwidth: Bandwidth::BW203k125Hz,
+                coding_rate: CodingRate::CR4_7,
+                spreading_factor: SpreadingFactor::SF7
+            }, 1000).await.ok().unwrap();
+            tx.write_register(SFAdditionalConfiguration::SF7_8).await.ok().unwrap();
+            tx.write_register(FrequencyCompensationMode(1)).await.ok().unwrap();
+            tx.command_and_wait(SetLoraPacketParameters {
+                crc_mode: LoRaCrcMode::Enabled,
+                header_type: LoRaHeaderType::Explicit,
+                iq_mode: LoRaIQMode::Standard,
+                payload_length: 64,
+                preamble_length: 20.into(),
+            }, 1000).await.ok().unwrap();
+            tx.command_and_wait(SetTxParametersCommand {
+                power: -18,
+                ramp: TxRampTime::Ramp10us
+            }, 1000).await.ok().unwrap();
+            tx.write_buffer(128, &[0, 1, 2, 8, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7]).await.ok().unwrap();
+            tx.command_and_wait(SetIRQParametersCommand {
+                dio_mask: [SX1280Interrupt::empty(); 3],
+                irq_mask: SX1280Interrupt::TxDone | SX1280Interrupt::RXTXTimeout,
+            }, 1000).await.ok().unwrap();
+            tx.command_and_wait(ClearIrqCommand(SX1280Interrupt::all()), 1000).await.ok().unwrap();
+        }
+
+        info!("RX Config...");
+        //rx_config
+        {
+            rx.command_and_wait(SetRFFrequencyCommand(2_495_000_000), 1000).await.ok().unwrap();
+            rx.command_and_wait(SetBufferBaseAddressCommand { rx_base_address: 0, tx_base_address: 128 }, 1000).await.ok().unwrap();
+            rx.command_and_wait(SetLoraModulationParameters {
+                bandwidth: Bandwidth::BW203k125Hz,
+                coding_rate: CodingRate::CR4_7,
+                spreading_factor: SpreadingFactor::SF7
+            }, 1000).await.ok().unwrap();
+            rx.write_register(SFAdditionalConfiguration::SF7_8).await.ok().unwrap();
+            rx.write_register(FrequencyCompensationMode(1)).await.ok().unwrap();
+            rx.command_and_wait(SetLoraPacketParameters {
+                crc_mode: LoRaCrcMode::Enabled,
+                header_type: LoRaHeaderType::Explicit,
+                iq_mode: LoRaIQMode::Standard,
+                payload_length: 32,
+                preamble_length: 10.into(),
+            }, 1000).await.ok().unwrap();
+            rx.command_and_wait(SetIRQParametersCommand {
+                dio_mask: [SX1280Interrupt::empty(); 3],
+                irq_mask: SX1280Interrupt::RxDone | SX1280Interrupt::RXTXTimeout | SX1280Interrupt::CRCError,
+            }, 1000).await.ok().unwrap();
+            rx.command_and_wait(ClearIrqCommand(SX1280Interrupt::all()), 1000).await.ok().unwrap();
+            // rx.write_register(RxGain::new().with_sensitivity(RxGainSensitivity::LowSensitivity)).await.ok().unwrap();
+        }
+
+        info!("Config Complete!");
+
+        let mut x = 0;
+        loop {
+
+            // place receiver in receive mode
+            rx.command_and_wait(ClearIrqCommand(SX1280Interrupt::all()), 1000).await.ok().unwrap();
+            let rx_irq = rx.command(GetIrqStatusCommand).await.ok().unwrap();
+            info!("RX IRQ STATUS: {}/{}", rx_irq, SX1280Interrupt::RxDone);
+            rx.command_and_wait(SetRxModeCommand{
+                period_base: PeriodBase::Base4ms,
+                period: RxPeriod::OneShot
+            }, 10000).await.ok().unwrap();
+            Mono::delay(1000.millis()).await;
+
+
+            let current_time = Mono::now();
+            tx.command_and_wait(SetTxModeCommand {
+                period: TxPeriod::NoTimeout,
+                period_base: PeriodBase::Base1ms
+            }, 10000).await.ok().unwrap();
+
+
+            let response = tx.wait_for_irq(SX1280Interrupt::TxDone, true, 10000).await;
+            match response {
+                Ok(_) => {}
+                Err(SX1280Error::Timeout) => {error!("timeout")}
+                Err(SX1280Error::Busy) => {error!("busy")}
+                Err(_) => {error!("other")}
+            }
+            let duration = Mono::now().checked_duration_since(current_time).unwrap().to_millis();
+            info!("{} - Transmitted (took {}ms)", x, duration);
+            x += 1;
+
+            Mono::delay(1000.millis()).await;
+            let rx_irq = rx.command(GetIrqStatusCommand).await.ok().unwrap();
+            info!("RX IRQ STATUS: {}/{}", rx_irq, SX1280Interrupt::RxDone);
+            if rx_irq.contains(SX1280Interrupt::RxDone) {
+                let mut data = [0u8; 10];
+                rx.read_buffer(0, &mut data).await.ok().unwrap();
+                info!("packet beginning {}", data);
+            }
+
+            Mono::delay(10000.millis()).await;
+        }
 
         while let Ok(b) = rx_queue.recv().await {
             let _ = uart_tx.send(b).await;
-            let _ = uart_tx.send(((status >> 6) & 7) + 48).await;
-            let _ = uart_tx.send(((status >> 3) & 7) + 48).await;
-            let _ = uart_tx.send((status & 7) + 48).await;
             NVIC::pend(Interrupt::USBCTRL_IRQ);
         }
     }

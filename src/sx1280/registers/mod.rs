@@ -1,4 +1,6 @@
 pub mod rx_gain;
+pub mod sf_additional_configuration;
+pub mod frequency_compensation_mode;
 
 use core::error::Error;
 use core::fmt::{Display, Formatter};

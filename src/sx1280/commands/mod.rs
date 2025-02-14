@@ -79,8 +79,11 @@ pub enum PeriodBase {
     Base4ms = 3,
 }
 
+#[derive(Clone, Copy, Debug, Format)]
+pub struct SX1280Interrupt(u16);
+
 bitflags! {
-    pub struct SX1280Interrupt: u16 {
+    impl SX1280Interrupt: u16 {
         const TxDone =                      0x0001;
         const RxDone =                      0x0002;
         const SyncWordValid =               0x0004;
@@ -97,7 +100,6 @@ bitflags! {
         const CADDetect =                   0x2000;
         const RXTXTimeout =                 0x4000;
         const PreambleDetect =              0x8000;
-
         const _ = !0;
     }
 }

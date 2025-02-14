@@ -361,6 +361,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "log"
+version = "0.4.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04cbf5b083de1c7e0222a7a51dbfdba1cbe1c6ab0b15e29fff3f6c077fd9cd9f"
+
+[[package]]
 name = "lora"
 version = "0.1.0"
 dependencies = [
@@ -370,6 +376,7 @@ dependencies = [
  "defmt",
  "defmt-rtt",
  "embedded-hal 1.0.0",
+ "log",
  "num_enum 0.7.3",
  "num_enum_derive 0.7.3",
  "panic-probe",

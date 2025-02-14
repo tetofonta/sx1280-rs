@@ -17,7 +17,7 @@ pub enum RxGainSensitivity {
 #[bitfield(u8, defmt=true)]
 pub struct RxGain{
     #[bits(6)] _unknown: u8,
-    #[bits(2)] sensitivity: RxGainSensitivity,
+    #[bits(2)] pub sensitivity: RxGainSensitivity,
 }
 
 
